@@ -94,6 +94,12 @@ Homepage forms (inquiries, property listing requests, listing alerts, price aler
 - All data is stored in Korea (Seoul region), with no transfer abroad.
 - Each office is the data controller and DoubleDouble Soft the processor, under a data-processing agreement accepted at signup. I wrote the terms of service, privacy policy, and agreement.
 
+### 5. Bug tracker with AI triage
+To run the service, I built a small issue tracker, Apt U Todo, where testers and I record bugs and feature requests.
+- **Auto-classification:** after the title and description are written, "Auto-classify" sends them to the AI model jev, which suggests the type (bug or feature), the priority (urgent, normal, or low), and the area of the product (for example, KakaoTalk messages, settings, listings, or the office homepage).
+- **Human in the loop:** suggested fields are marked "Suggested" and the writer reviews them before saving, the same principle as in the messaging pipeline.
+- **Workflow:** issues move from open to in progress, awaiting verification, and verified. The list can be filtered by type, area, priority, assignee, and "written by me", and screenshots can be pasted straight into an issue. It has tracked 132 issues so far (as of October 2026).
+
 ## Product
 
 | Map consultation | Customer management |
@@ -103,6 +109,10 @@ Homepage forms (inquiries, property listing requests, listing alerts, price aler
 | Monthly schedule | Message history |
 |---|---|
 | ![Monthly schedule](docs/images/schedule.png) | ![Message history](docs/images/message.png) |
+
+| Issue list | New issue with AI triage |
+|---|---|
+| ![Issue list](docs/images/todo.png) | ![New issue with AI triage](docs/images/todo_jev.png) |
 
 Every feature works on mobile as well as PC. Agents show the map to walk-in customers, send schedule and listing notifications, and copy price tables and images for their blogs; visit statistics show homepage traffic from notifications and blog posts.
 

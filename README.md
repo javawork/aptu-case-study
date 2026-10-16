@@ -86,7 +86,7 @@ The MOLIT API is queried per area code and month. Records carry no transaction I
 - **Attribution limited to what is observable:** delivery status and link clicks into the homepage, with no claims of read receipts or offline conversions.
 
 ### 3. Request intake
-Homepage forms (inquiries, property listing requests, listing alerts, price alerts) go into a review queue with an unprocessed count in the admin. Nothing is auto-registered as a customer; the agent approves each request, which keeps spam and mistaken entries out of the CRM and the messaging pipeline. Processed and declined requests are deleted after 6 months.
+Homepage forms (inquiries, property listing requests, listing alerts, price alerts) go into a review queue with an unprocessed count in the admin. Incoming messages are first screened by the AI model jev, which filters out spam and prank submissions that aren't real requests. Nothing is auto-registered as a customer; the agent approves each request, which keeps spam and mistaken entries out of the CRM and the messaging pipeline. Processed and declined requests are deleted after 6 months.
 
 ### 4. Privacy by design
 - Customer records hold only name, phone, interests, and consultation notes, with no resident registration number and no address.

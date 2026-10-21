@@ -18,7 +18,6 @@
   - Multi-tenant isolation with Postgres row-level security keyed on office ID
   - Messaging pipeline with delivery-result polling, SMS fallback, monthly quotas, and consent lifecycle
   - Privacy-minimal data model; all data hosted in Korea
-- **Status:** In daily use by one office; opening to more offices (as of October 2026).
 
 ## Architecture
 
@@ -67,38 +66,27 @@ flowchart LR
 ## Backend design
 
 ### 1. Transaction-price data pipeline
-The MOLIT API is queried per area code and month. Records carry no transaction ID, and a deal can be reported as cancelled weeks after it first appears, sometimes as a separate duplicate row.
+The MOLIT API has no transaction IDs, and cancellations can arrive weeks later as separate rows.
 
-- **Schedule:** Vercel Cron runs daily at 04:00 KST. Monday–Saturday it re-fetches the last 3 months, which covers the 30-day reporting deadline; on Sunday it re-fetches 24 months to catch late cancellations. A manual backfill goes back up to 120 months.
-- **Coverage:** 1,427 hand-curated complexes in 22 districts across Gyeonggi, Incheon, and Seoul (18 area codes). The job fetches every area code in the list, calls both the sale and the jeonse/monthly-rent APIs, and keeps only rows for listed complexes.
-- **Matching:** complexes are keyed on MOLIT's own complex ID (`aptSeq`), not on names. Names are normalized only once, in a helper that looks up the ID when a complex is added to the list.
-- **Normalization:** sale and rent responses are unified into one record shape, with amounts like `"60,000"` converted to integers and cancellation flags and dates parsed.
-- **Idempotency:** each record gets a deterministic key, a SHA-1 hash of its identifying fields. The cancellation flag is deliberately left out of the hash, so a later cancellation report updates the existing row. Duplicates within one response are merged, keeping the most informative row, before upserting through PostgREST with `on_conflict=row_key`. First-seen timestamps survive re-ingest and drive the "new transaction" flag. Every run is logged.
-- **Serving the map:** instead of a spatial index, data is served per district. One RPC returns a district's data as a single JSON payload (about 200 KB) along with district bounding boxes. The client loads only the districts in the viewport and skips loading at low zoom. Per-complex price tables use an `(apt_seq, deal_date desc)` index.
-- **Scope:** limited to apartments by design, which keeps matching exact.
+- **Ingest:** Vercel Cron re-fetches the last 3 months daily at 04:00 KST, and 24 months on Sundays to catch late cancellations.
+- **Matching:** 1,427 complexes are keyed on MOLIT's complex ID (`aptSeq`), not names, so matching is exact.
+- **Idempotency:** rows are upserted on a SHA-1 hash of identifying fields, excluding the cancellation flag, so late cancellations update the existing row. First-seen timestamps survive re-ingest and drive the "new transaction" flag.
+- **Serving the map:** instead of a spatial index, one RPC returns a district as a single JSON payload (about 200 KB); the client loads only districts in the viewport.
 
 ### 2. Messaging pipeline
-- **Human in the loop:** the system computes which messages are due (tomorrow's viewing, a new listing matching a customer's request, a new transaction in a watched complex), but sends only when the agent confirms.
-- **Delivery results:** the send API acknowledges only receipt. Every 10 minutes a cron job polls the messaging provider for messages whose outcome is still unknown, then records whether each was delivered by KakaoTalk, delivered by SMS fallback, or failed. Updates only touch rows still in the "sent" state, so manual edits made in between aren't overwritten. Polling stops after 72 hours. The provider's raw status code is stored, because the SMS-fallback and failure responses had not yet been observed in production.
-- **Quotas:** each office gets 100 KakaoTalk messages per calendar month, counted in Seoul time. A batch that exceeds the remaining quota is rejected whole rather than partially sent, so it's always clear who received a message. If the count can't be read, nothing is sent, since sends are irreversible.
-- **Consent lifecycle:** alert subscriptions expire 6 months after signup and advertising consent must be reconfirmed every 2 years. Ending a subscription also ends its advertising consent, and a "consent check" tab lists the customers coming due.
-- **Single sender channel** for all tenants, removing per-tenant channel registration and template review from onboarding.
-- **Attribution limited to what is observable:** delivery status and link clicks into the homepage, with no claims of read receipts or offline conversions.
+- **Human in the loop:** the system computes which messages are due (viewings, matching listings, new transactions in watched complexes); the agent confirms before anything is sent.
+- **Delivery results:** a cron job polls every 10 minutes and records KakaoTalk delivery, SMS fallback, or failure, updating only rows still marked "sent" so manual edits aren't overwritten.
+- **Quotas:** 100 messages per office per month. Batches over the remaining quota are rejected whole, and nothing is sent if the count can't be read.
+- **Consent lifecycle:** alert subscriptions expire after 6 months and advertising consent is reconfirmed every 2 years, with customers coming due listed separately.
 
 ### 3. Request intake
-Homepage forms (inquiries, property listing requests, listing alerts, price alerts) go into a review queue with an unprocessed count in the admin. Incoming messages are first screened by the AI model jev, which filters out spam and prank submissions that aren't real requests. Nothing is auto-registered as a customer; the agent approves each request, which keeps spam and mistaken entries out of the CRM and the messaging pipeline. Processed and declined requests are deleted after 6 months.
+Homepage form submissions are screened by the AI model jev for spam and pranks, then wait in a review queue; nothing becomes a customer until the agent approves it.
 
 ### 4. Privacy by design
-- Customer records hold only name, phone, interests, and consultation notes, with no resident registration number and no address.
-- Optional fields appear only where a business process requires them.
-- All data is stored in Korea (Seoul region), with no transfer abroad.
-- Each office is the data controller and DoubleDouble Soft the processor, under a data-processing agreement accepted at signup. I wrote the terms of service, privacy policy, and agreement.
+Customer records hold only name, phone, interests, and consultation notes (no resident registration number or address), and all data stays in the Seoul region. I wrote the terms of service, privacy policy, and data-processing agreement.
 
 ### 5. Bug tracker with AI triage
-To run the service, I built a small issue tracker, Apt U Todo, where testers and I record bugs and feature requests.
-- **Auto-classification:** after the title and description are written, "Auto-classify" sends them to the AI model jev, which suggests the type (bug or feature), the priority (urgent, normal, or low), and the area of the product (for example, KakaoTalk messages, settings, listings, or the office homepage).
-- **Human in the loop:** suggested fields are marked "Suggested" and the writer reviews them before saving, the same principle as in the messaging pipeline.
-- **Workflow:** issues move from open to in progress, awaiting verification, and verified. The list can be filtered by type, area, priority, assignee, and "written by me", and screenshots can be pasted straight into an issue. It has tracked 132 issues so far (as of October 2026).
+In Apt U Todo, the issue tracker I use with testers, "Auto-classify" has the AI model jev suggest type, priority, and area; the writer reviews the suggestions before saving.
 
 ## Product
 
